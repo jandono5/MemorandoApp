@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "353479550210",
+    "project_id": "memorando-jba",
+    "storage_bucket": "memorando-jba.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:353479550210:android:f46791fb08fc34045ece1b",
+        "android_client_info": {
+          "package_name": "com.example.memorando"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAV4wQJu-DBUHzJea1hvQHeEo2aHvbeVfo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
