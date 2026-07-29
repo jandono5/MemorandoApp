@@ -58,8 +58,8 @@ class AppState extends ChangeNotifier {
       'email': _user!.email,
     });
 
-    // 2. Ensure initial node exists under /users/{device_id} for the Pi
-    final deviceRef = _db.ref('users/$cleanedId/basic_info');
+    // 2. Ensure initial node exists under /devices/{device_id} for the Pi
+    final deviceRef = _db.ref('devices/$cleanedId/basic_info');
     final snapshot = await deviceRef.get();
     if (!snapshot.exists) {
       await deviceRef.set({
