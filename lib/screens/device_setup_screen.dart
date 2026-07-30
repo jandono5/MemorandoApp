@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
+import 'settings_screen.dart'; // ADDED: Import the settings screen
 
 class DeviceSetupScreen extends StatefulWidget {
   const DeviceSetupScreen({super.key});
@@ -52,19 +53,22 @@ class _DeviceSetupScreenState extends State<DeviceSetupScreen> {
             ),
             const SizedBox(height: 24),
             ElevatedButton(
-              onPressed: () async {
-                if (_serialController.text.isNotEmpty) {
-                  try {
-                    await appState.linkDeviceId(_serialController.text);
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Error: $e')),
-                    );
-                  }
+              onPressed: () {
+                // NEW ROUTING: Push to settings setup BEFORE officially linking in AppState
+                if (_serialController.text.trim().isNotEmpty) {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => SettingsScreen(
+                        deviceId: _serialController.text.trim(),
+                        isSetupMode: true,
+                      ),
+                    ),
+                  );
                 }
               },
               style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
-              child: const Text('Save and Connect'),
+              child: const Text('Continue to Setup'),
             ),
           ],
         ),

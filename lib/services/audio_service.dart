@@ -7,25 +7,23 @@ import 'package:flutter/foundation.dart';
 
 class AudioService {
   final AudioRecorder _recorder = AudioRecorder();
-  String? _currentFilePath;
+  
+  // Exposes a stream of amplitude data (dB) updated every 100ms
+  Stream<Amplitude> get amplitudeStream => _recorder.onAmplitudeChanged(const Duration(milliseconds: 100));
 
   // Starts recording and returns true if successful
-  Future startRecording(String deviceId, String timeOfDay) async {
+  Future<bool> startRecording(String deviceId, String timeOfDay) async {
     try {
-      // 1. Request microphone permission
       final status = await Permission.microphone.request();
       if (status != PermissionStatus.granted) return false;
 
-      // 2. Ensure recorder is ready
       if (await _recorder.hasPermission()) {
         final dir = await getApplicationDocumentsDirectory();
-        // Naming convention matches your Pi script exactly, just as .m4a
-        _currentFilePath = '${dir.path}/${deviceId}_$timeOfDay.m4a';
+        final filePath = '${dir.path}/${deviceId}_$timeOfDay.m4a';
         
-        // Start recording in M4A (AAC) format
         await _recorder.start(
           const RecordConfig(encoder: AudioEncoder.aacLc),
-          path: _currentFilePath!,
+          path: filePath,
         );
         return true;
       }
@@ -35,31 +33,46 @@ class AudioService {
     return false;
   }
 
-  // Stops recording, uploads to Firebase, and deletes local cache
-  Future stopAndUpload(String deviceId, String timeOfDay) async {
+  // Stops recording and returns the local file path for playback
+  Future<String?> stopRecording() async {
     try {
-      final path = await _recorder.stop();
+      return await _recorder.stop();
+    } catch (e) {
+      debugPrint("Stop recording error: $e");
+      return null;
+    }
+  }
+
+  // Uploads the reviewed audio to Firebase and deletes the local cache
+  Future<bool> uploadAudio(String deviceId, String timeOfDay, String localPath) async {
+    try {
+      final file = File(localPath);
+      final storageRef = FirebaseStorage.instance.ref().child('${deviceId}_$timeOfDay.m4a');
       
-      if (path != null) {
-        final file = File(path);
-        // Push to root of bucket: e.g., "1000000abc_morning.m4a"
-        final storageRef = FirebaseStorage.instance.ref().child('${deviceId}_$timeOfDay.m4a');
-        
-        await storageRef.putFile(file);
-        
-        // Clean up local file to save space on the carer's phone
-        if (await file.exists()) {
-          await file.delete();
-        }
-        return true;
+      await storageRef.putFile(file);
+      
+      if (await file.exists()) {
+        await file.delete();
       }
+      return true;
     } catch (e) {
       debugPrint("Upload error: $e");
+      return false;
     }
-    return false;
+  }
+
+  // Deletes the local file if the user chooses to discard the recording
+  Future<void> deleteLocalAudio(String localPath) async {
+    try {
+      final file = File(localPath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (e) {
+      debugPrint("Delete error: $e");
+    }
   }
   
-  // Cleanup when dashboard is closed
   void dispose() {
     _recorder.dispose();
   }
