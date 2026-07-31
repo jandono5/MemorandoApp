@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_storage/firebase_storage.dart'; 
 import 'package:audioplayers/audioplayers.dart'; 
-import 'package:record/record.dart'; 
+import 'package:record/record.dart';
+import 'package:google_fonts/google_fonts.dart'; // NEW IMPORT
 import '../providers/app_state.dart';
 import '../services/audio_service.dart';
 import 'settings_screen.dart';
@@ -33,6 +34,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isLoading = true;
   int _wakeUpTime = 8;
   int _turnOffTime = 21;
+  
+  String _morningStatus = 'pending';
+  String _eveningStatus = 'pending';
 
   Map<String, String> _scheduledMessages = {};
   Set<String> _availableCloudAudio = {};
@@ -42,7 +46,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     "morning_status", "evening_status"
   ];
 
-  // Theme Colors
   final Color _primaryGreen = Colors.green.shade800;
   final Color _accentGreen = Colors.green.shade600;
 
@@ -62,6 +65,167 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _audioService.dispose(); 
     _cloudAudioPlayer.dispose();
     super.dispose();
+  }
+
+  Widget _buildPlayedBlock(String slotTitle, String status, {required bool isMorning}) {
+    bool showTomorrowButton = false;
+    final currentHour = DateTime.now().hour;
+    final slotKey = isMorning ? 'morning' : 'evening';
+    final controller = isMorning ? _morningController : _eveningController;
+
+    if (isMorning && currentHour >= 17) {
+      showTomorrowButton = true;
+    } else if (!isMorning && currentHour >= _turnOffTime) {
+      showTomorrowButton = true;
+    }
+
+    String buttonText = 'Schedule Tomorrow\'s Message';
+    bool hasTomorrowContent = _availableCloudAudio.contains('${widget.deviceId}_$slotKey.m4a') || controller.text.isNotEmpty;
+    if (hasTomorrowContent) {
+      buttonText = 'View/Edit Tomorrow\'s Message';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: _primaryGreen,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(
+            '$slotTitle Message $status', 
+            style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          if (showTomorrowButton) ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              icon: Icon(hasTomorrowContent ? Icons.visibility : Icons.edit_calendar, color: _primaryGreen),
+              label: Text(buttonText),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _primaryGreen,
+              ),
+              onPressed: () {
+                _showTomorrowDialog(slotTitle, isMorning);
+              },
+            )
+          ]
+        ],
+      ),
+    );
+  }
+
+  void _showTomorrowDialog(String slotTitle, bool isMorning) {
+    final slotKey = isMorning ? 'morning' : 'evening';
+    final mainController = isMorning ? _morningController : _eveningController;
+    final tempController = TextEditingController(text: mainController.text);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final hasCloudAudio = _availableCloudAudio.contains('${widget.deviceId}_$slotKey.m4a');
+
+            return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text("Tomorrow's $slotTitle Message", style: TextStyle(color: _primaryGreen, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text(
+                    "Because the status resets at midnight, any text/audio you upload now will be primed and ready for tomorrow.", 
+                    style: TextStyle(fontSize: 12, color: Colors.grey)
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: hasCloudAudio
+                          ? _buildDisabledAudioBox()
+                          : TextField(
+                              controller: tempController,
+                              maxLines: 2,
+                              maxLength: 250,
+                              decoration: InputDecoration(
+                                hintText: isMorning 
+                                    ? "You do not have anything on today - you can take the day to relax!"
+                                    : "There's nothing for you to do tonight. Relax and have a lovely night's sleep!",
+                                hintMaxLines: 2,
+                                labelText: 'Text Message',
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: _primaryGreen, width: 2),
+                                ),
+                              ),
+                            ),
+                      ),
+                      const SizedBox(width: 8),
+                      Column(
+                        children: [
+                          if (!hasCloudAudio)
+                            IconButton(
+                              icon: Icon(Icons.mic, color: _primaryGreen, size: 28),
+                              tooltip: "Record Audio",
+                              onPressed: () async {
+                                bool uploaded = await _recordAudioFlow(slotKey);
+                                if (uploaded) {
+                                  await _messagesRef.child('${slotKey}_text').set("[Voice message recorded]");
+                                  setDialogState(() {}); 
+                                }
+                              },
+                            ),
+                          if (hasCloudAudio) ...[
+                            IconButton(
+                              icon: Icon(Icons.play_circle_outline, color: _accentGreen, size: 28),
+                              tooltip: 'Play Cloud Audio',
+                              onPressed: () => _playCloudMessage(slotKey),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
+                              tooltip: 'Delete Voice Recording',
+                              onPressed: () async {
+                                await _deleteCloudAudio(slotKey);
+                                setDialogState(() {
+                                  tempController.text = ""; 
+                                });
+                              },
+                            ),
+                          ]
+                        ],
+                      )
+                    ],
+                  ),
+                ],
+              ),
+              actions: [
+                 TextButton(
+                   onPressed: () => Navigator.pop(context), 
+                   child: Text("Cancel", style: TextStyle(color: Colors.grey.shade700))
+                 ),
+                 ElevatedButton(
+                   style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white),
+                   onPressed: () async {
+                     if (!hasCloudAudio) {
+                       await _messagesRef.update({
+                         '${slotKey}_text': tempController.text.trim(),
+                       });
+                     }
+                     if (context.mounted) Navigator.pop(context);
+                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scheduled for tomorrow!')));
+                   },
+                   child: const Text("Save Content"),
+                 )
+              ],
+            );
+          }
+        );
+      }
+    );
   }
 
   Future<void> _fetchAvailableAudio() async {
@@ -113,7 +277,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_isLoading) {
         _morningController.text = data['morning_text'] ?? '';
         _eveningController.text = data['evening_text'] ?? '';
+      } else {
+        if (!FocusScope.of(context).hasPrimaryFocus) {
+          _morningController.text = data['morning_text'] ?? '';
+          _eveningController.text = data['evening_text'] ?? '';
+        }
       }
+
+      _morningStatus = data['morning_status']?.toString() ?? 'pending';
+      _eveningStatus = data['evening_status']?.toString() ?? 'pending';
 
       final Map<String, String> parsedScheduled = {};
       data.forEach((key, value) {
@@ -136,12 +308,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _saveDailyMessages() async {
-    await _messagesRef.update({
+    Map<String, dynamic> updates = {
       'morning_text': _morningController.text,
       'evening_text': _eveningController.text,
-      'morning_status': 'pending', 
-      'evening_status': 'pending',
-    });
+    };
+
+    if (!_morningStatus.startsWith('Played')) updates['morning_status'] = 'pending';
+    if (!_eveningStatus.startsWith('Played')) updates['evening_status'] = 'pending';
+
+    await _messagesRef.update(updates);
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -214,12 +389,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (isRecording)
+                  if (isRecording) ...[
                     Padding(
                       padding: const EdgeInsets.all(24.0),
                       child: AudioVisualizer(amplitudeStream: _audioService.amplitudeStream),
+                    ),
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.stop),
+                      label: const Text('Stop Recording'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red, 
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12)
+                      ),
+                      onPressed: () async {
+                        final path = await _audioService.stopRecording();
+                        setDialogState(() {
+                          isRecording = false;
+                          localPath = path;
+                        });
+                      },
                     )
-                  else
+                  ] else ...[
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -235,63 +427,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ],
                     ),
+                  ],
                 ],
               ),
-              actions: [
-                if (isRecording)
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop Recording'),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-                    onPressed: () async {
-                      final path = await _audioService.stopRecording();
-                      setDialogState(() {
-                        isRecording = false;
-                        localPath = path;
-                      });
-                    },
-                  )
-                else ...[
-                  TextButton(
-                    onPressed: () async {
-                      await previewPlayer.dispose();
-                      if (localPath != null) await _audioService.deleteLocalAudio(localPath!);
-                      if (context.mounted) Navigator.pop(context, false);
-                    },
-                    child: const Text('Discard', style: TextStyle(color: Colors.red)),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white),
-                    onPressed: () async {
-                      await previewPlayer.dispose();
+              actions: isRecording ? null : [
+                TextButton(
+                  onPressed: () async {
+                    await previewPlayer.dispose();
+                    if (localPath != null) await _audioService.deleteLocalAudio(localPath!);
+                    if (context.mounted) Navigator.pop(context, false);
+                  },
+                  child: const Text('Discard', style: TextStyle(color: Colors.red)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white),
+                  onPressed: () async {
+                    await previewPlayer.dispose();
 
-                      if (localPath != null) {
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploading voice message...')));
-                        final success = await _audioService.uploadAudio(widget.deviceId, slot, localPath!);
-                        
-                        if (mounted) {
-                          if (success) {
-                             setState(() {
-                               _availableCloudAudio.add('${widget.deviceId}_$slot.m4a');
-                             });
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               SnackBar(content: const Text('Voice message saved!'), backgroundColor: _accentGreen),
-                             );
-                             Navigator.pop(context, true);
-                          } else {
-                             ScaffoldMessenger.of(context).showSnackBar(
-                               const SnackBar(content: Text('Failed to upload.'), backgroundColor: Colors.red),
-                             );
-                             Navigator.pop(context, false);
-                          }
+                    if (localPath != null) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Uploading voice message...')));
+                      final success = await _audioService.uploadAudio(widget.deviceId, slot, localPath!);
+                      
+                      if (mounted) {
+                        if (success) {
+                           setState(() {
+                             _availableCloudAudio.add('${widget.deviceId}_$slot.m4a');
+                           });
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(content: const Text('Voice message saved!'), backgroundColor: _accentGreen),
+                           );
+                           Navigator.pop(context, true);
+                        } else {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             const SnackBar(content: Text('Failed to upload.'), backgroundColor: Colors.red),
+                           );
+                           Navigator.pop(context, false);
                         }
-                      } else {
-                        Navigator.pop(context, false);
                       }
-                    },
-                    child: const Text('Upload & Save'),
-                  ),
-                ],
+                    } else {
+                      Navigator.pop(context, false);
+                    }
+                  },
+                  child: const Text('Upload & Save'),
+                ),
               ],
             );
           },
@@ -309,7 +487,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
         border: Border.all(color: Colors.grey.shade400),
-        borderRadius: BorderRadius.circular(8), // Softer corners
+        borderRadius: BorderRadius.circular(8),
       ),
       alignment: Alignment.centerLeft,
       child: Row(
@@ -358,13 +536,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final minutes = ['00', '05', '10', '15', '20', '25', '30', '35', '40', '45', '50', '55'];
 
+    String? currentAudioLocation = (existingTimeKey != null && _availableCloudAudio.contains('${widget.deviceId}_$existingTimeKey.m4a'))
+        ? existingTimeKey
+        : null;
+    
+    bool isExistingTTS = existingTimeKey != null && currentAudioLocation == null;
+    bool isExistingAudio = existingTimeKey != null && currentAudioLocation != null;
+
     showDialog(
       context: context,
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             final currentTimeKey = "${selectedHour}_$selectedMinute";
-            final hasCloudAudio = _availableCloudAudio.contains('${widget.deviceId}_$currentTimeKey.m4a');
+            final hasAudio = currentAudioLocation != null;
             
             return AlertDialog(
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -408,12 +593,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Row(
                     children: [
                       Expanded(
-                        child: hasCloudAudio 
+                        child: hasAudio 
                           ? _buildDisabledAudioBox()
                           : TextField(
                               controller: messageController,
                               maxLines: 2,
+                              maxLength: 250,
                               decoration: InputDecoration(
+                                hintText: "Enter a custom message here...",
                                 labelText: 'Text Message',
                                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                 focusedBorder: OutlineInputBorder(
@@ -426,38 +613,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox(width: 8),
                       Column(
                         children: [
-                          if (!hasCloudAudio)
+                          if (!hasAudio && !isExistingTTS)
                             IconButton(
                               icon: Icon(Icons.mic, color: _primaryGreen),
                               tooltip: "Record Audio",
                               onPressed: () async {
                                 bool uploaded = await _recordAudioFlow(currentTimeKey);
-                                if (uploaded) setDialogState(() {}); 
+                                
+                                if (uploaded) {
+                                  if (existingTimeKey != null && existingTimeKey != currentTimeKey) {
+                                    await _messagesRef.child(existingTimeKey).remove();
+                                    await _messagesRef.child('${existingTimeKey}_audio_trigger').remove();
+                                  }
+                                  
+                                  await _messagesRef.child(currentTimeKey).set("[Voice message recorded]");
+                                  
+                                  if (context.mounted) Navigator.pop(context);
+                                } 
                               },
                             ),
-                          if (hasCloudAudio) ...[
+                          if (hasAudio) ...[
                             IconButton(
                               icon: Icon(Icons.play_circle_outline, color: _accentGreen),
                               tooltip: "Play Cloud Audio",
-                              onPressed: () => _playCloudMessage(currentTimeKey),
+                              onPressed: () => _playCloudMessage(currentAudioLocation!),
                             ),
-                            IconButton(
-                              icon: const Icon(Icons.delete_outline, color: Colors.red),
-                              tooltip: "Delete Voice Note",
-                              onPressed: () async {
-                                await _deleteCloudAudio(currentTimeKey);
-                                setDialogState(() {
-                                  messageController.text = ""; 
-                                });
-                              },
-                            ),
+                            if (!isExistingAudio)
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                tooltip: "Delete Voice Note",
+                                onPressed: () async {
+                                  await _deleteCloudAudio(currentAudioLocation!);
+                                  setDialogState(() {
+                                    currentAudioLocation = null;
+                                    messageController.text = ""; 
+                                  });
+                                },
+                              ),
                           ]
                         ],
                       )
                     ],
                   ),
                   const SizedBox(height: 12),
-                  const Text('Record a voice note or type a message.', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                  Text(
+                    isExistingTTS 
+                      ? 'Edit your text message below.' 
+                      : 'Record a voice note or type a message.', 
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)
+                  ),
                 ],
               ),
               actions: [
@@ -469,10 +673,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   style: ElevatedButton.styleFrom(backgroundColor: _primaryGreen, foregroundColor: Colors.white),
                   onPressed: () async {
                     String textToSave = messageController.text.trim();
-                    if (textToSave.isEmpty) textToSave = "[Voice message recorded]";
+                    if (hasAudio) textToSave = "[Voice message recorded]";
                     
                     if (existingTimeKey != null && existingTimeKey != currentTimeKey) {
                       await _messagesRef.child(existingTimeKey).remove();
+                    }
+                    
+                    if (hasAudio && currentAudioLocation != currentTimeKey) {
+                      try {
+                        final oldFileName = '${widget.deviceId}_$currentAudioLocation.m4a';
+                        final newFileName = '${widget.deviceId}_$currentTimeKey.m4a';
+                        
+                        final oldRef = FirebaseStorage.instance.ref().child(oldFileName);
+                        final newRef = FirebaseStorage.instance.ref().child(newFileName);
+                        
+                        final data = await oldRef.getData();
+                        if (data != null) {
+                          await newRef.putData(data);
+                          await oldRef.delete();
+                          
+                          this.setState(() {
+                            _availableCloudAudio.remove(oldFileName);
+                            _availableCloudAudio.add(newFileName);
+                          });
+                        }
+                      } catch (e) {
+                        debugPrint("Error migrating cloud audio: $e");
+                      }
+                    }
+                    
+                    if (hasAudio) {
+                      await _messagesRef.update({
+                        '${currentTimeKey}_audio_trigger': DateTime.now().millisecondsSinceEpoch,
+                      });
+                      if (existingTimeKey != null && existingTimeKey != currentTimeKey) {
+                        await _messagesRef.child('${existingTimeKey}_audio_trigger').remove();
+                      }
                     }
                     
                     await _messagesRef.child(currentTimeKey).set(textToSave);
@@ -496,9 +732,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100, // Slightly off-white background for cards to pop
+      backgroundColor: Colors.grey.shade100, 
       appBar: AppBar(
-        title: const Text('MemorAndo Dashboard'),
+        centerTitle: true,
+        title: Text(
+          'MemorAndo',
+          style: GoogleFonts.rubikSprayPaint(
+            fontSize: 28,
+            color: Colors.white,
+          ),
+        ),
         backgroundColor: _primaryGreen,
         foregroundColor: Colors.white,
         actions: [
@@ -513,7 +756,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
           )
         ],
       ),
-      // FAB placed at bottom right utilizes the empty space perfectly
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showScheduledMessageDialog(),
         backgroundColor: _primaryGreen,
@@ -524,9 +766,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: _isLoading 
         ? Center(child: CircularProgressIndicator(color: _primaryGreen))
         : ListView(
-            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 80.0), // Extra bottom padding for FAB
+            padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 16.0, bottom: 80.0), 
             children: [
-              // --- DAILY MESSAGES CARD ---
               Text('Daily Schedule', style: TextStyle(fontSize: 20, color: _primaryGreen, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Card(
@@ -535,99 +776,123 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _availableCloudAudio.contains('${widget.deviceId}_morning.m4a')
-                              ? _buildDisabledAudioBox()
-                              : TextField(
-                                  controller: _morningController,
-                                  maxLines: 2,
-                                  decoration: InputDecoration(
-                                    labelText: 'Morning Message', 
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: _primaryGreen, width: 2),
-                                    ),
-                                  ),
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            children: [
-                              if (!_availableCloudAudio.contains('${widget.deviceId}_morning.m4a'))
-                                IconButton(
-                                  icon: Icon(Icons.mic, color: _primaryGreen, size: 28),
-                                  onPressed: () => _recordAudioFlow('morning'),
-                                ),
-                              if (_availableCloudAudio.contains('${widget.deviceId}_morning.m4a')) ...[
-                                IconButton(
-                                  icon: Icon(Icons.play_circle_outline, color: _accentGreen, size: 28),
-                                  tooltip: 'Play Cloud Audio',
-                                  onPressed: () => _playCloudMessage('morning'),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
-                                  tooltip: 'Delete Voice Recording',
-                                  onPressed: () => _deleteCloudAudio('morning'),
-                                ),
-                              ]
-                            ],
-                          )
-                        ],
+                      
+                      const Text(
+                        'Morning',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
+                      const SizedBox(height: 8),
+                      // --- CONDITIONAL MORNING UI ---
+                      _morningStatus.startsWith('Played')
+                        ? _buildPlayedBlock('Morning', _morningStatus, isMorning: true)
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _availableCloudAudio.contains('${widget.deviceId}_morning.m4a')
+                                  ? _buildDisabledAudioBox()
+                                  : TextField(
+                                      controller: _morningController,
+                                      maxLines: 2,
+                                      maxLength: 250,
+                                      decoration: InputDecoration(
+                                        hintText: "You do not have anything on today - you can take the day to relax!",
+                                        hintMaxLines: 2,
+                                        labelText: 'Morning Message', 
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(color: _primaryGreen, width: 2),
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                children: [
+                                  if (!_availableCloudAudio.contains('${widget.deviceId}_morning.m4a'))
+                                    IconButton(
+                                      icon: Icon(Icons.mic, color: _primaryGreen, size: 28),
+                                      onPressed: () => _recordAudioFlow('morning'),
+                                    ),
+                                  if (_availableCloudAudio.contains('${widget.deviceId}_morning.m4a')) ...[
+                                    IconButton(
+                                      icon: Icon(Icons.play_circle_outline, color: _accentGreen, size: 28),
+                                      tooltip: 'Play Cloud Audio',
+                                      onPressed: () => _playCloudMessage('morning'),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
+                                      tooltip: 'Delete Voice Recording',
+                                      onPressed: () => _deleteCloudAudio('morning'),
+                                    ),
+                                  ]
+                                ],
+                              )
+                            ],
+                          ),
                       
                       const Padding(
                         padding: EdgeInsets.symmetric(vertical: 12.0),
                         child: Divider(),
                       ),
                       
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: _availableCloudAudio.contains('${widget.deviceId}_evening.m4a')
-                              ? _buildDisabledAudioBox()
-                              : TextField(
-                                  controller: _eveningController,
-                                  maxLines: 2,
-                                  decoration: InputDecoration(
-                                    labelText: 'Evening Message', 
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                      borderSide: BorderSide(color: _primaryGreen, width: 2),
-                                    ),
-                                  ),
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          Column(
-                            children: [
-                              if (!_availableCloudAudio.contains('${widget.deviceId}_evening.m4a'))
-                                IconButton(
-                                  icon: Icon(Icons.mic, color: _primaryGreen, size: 28),
-                                  onPressed: () => _recordAudioFlow('evening'),
-                                ),
-                              if (_availableCloudAudio.contains('${widget.deviceId}_evening.m4a')) ...[
-                                IconButton(
-                                  icon: Icon(Icons.play_circle_outline, color: _accentGreen, size: 28),
-                                  tooltip: 'Play Cloud Audio',
-                                  onPressed: () => _playCloudMessage('evening'),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
-                                  tooltip: 'Delete Voice Recording',
-                                  onPressed: () => _deleteCloudAudio('evening'),
-                                ),
-                              ]
-                            ],
-                          )
-                        ],
+                      const Text(
+                        'Evening',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
                       ),
+                      const SizedBox(height: 8),
+                      // --- CONDITIONAL EVENING UI ---
+                      _eveningStatus.startsWith('Played')
+                        ? _buildPlayedBlock('Evening', _eveningStatus, isMorning: false)
+                        : Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: _availableCloudAudio.contains('${widget.deviceId}_evening.m4a')
+                                  ? _buildDisabledAudioBox()
+                                  : TextField(
+                                      controller: _eveningController,
+                                      maxLines: 2,
+                                      maxLength: 250,
+                                      decoration: InputDecoration(
+                                        hintText: "There's nothing for you to do tonight. Relax and have a lovely night's sleep!",
+                                        hintMaxLines: 2,
+                                        labelText: 'Evening Message', 
+                                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                          borderSide: BorderSide(color: _primaryGreen, width: 2),
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                children: [
+                                  if (!_availableCloudAudio.contains('${widget.deviceId}_evening.m4a'))
+                                    IconButton(
+                                      icon: Icon(Icons.mic, color: _primaryGreen, size: 28),
+                                      onPressed: () => _recordAudioFlow('evening'),
+                                    ),
+                                  if (_availableCloudAudio.contains('${widget.deviceId}_evening.m4a')) ...[
+                                    IconButton(
+                                      icon: Icon(Icons.play_circle_outline, color: _accentGreen, size: 28),
+                                      tooltip: 'Play Cloud Audio',
+                                      onPressed: () => _playCloudMessage('evening'),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline, color: Colors.red, size: 28),
+                                      tooltip: 'Delete Voice Recording',
+                                      onPressed: () => _deleteCloudAudio('evening'),
+                                    ),
+                                  ]
+                                ],
+                              )
+                            ],
+                          ),
                       
                       const SizedBox(height: 16),
                       SizedBox(
@@ -650,7 +915,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               
               const SizedBox(height: 24),
 
-              // --- SCHEDULED MESSAGES SECTION ---
               Text('Upcoming Time-Based Messages', style: TextStyle(fontSize: 20, color: _primaryGreen, fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               
@@ -789,7 +1053,6 @@ class _AudioVisualizerState extends State<AudioVisualizer> {
             width: 12,
             height: height,
             decoration: BoxDecoration(
-              // Kept red for the active recording visualizer as it universally means "recording"
               color: Colors.red.shade400, 
               borderRadius: BorderRadius.circular(6),
             ),

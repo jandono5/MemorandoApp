@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'dashboard_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/app_state.dart';
 
 class SettingsScreen extends StatefulWidget {
   final String deviceId;
-  final bool isSetupMode; // Flag to determine if this is first-time setup
+  final bool isSetupMode;
 
   const SettingsScreen({
     super.key, 
     required this.deviceId,
-    this.isSetupMode = false, // Defaults to false for normal dashboard usage
+    this.isSetupMode = false,
   });
 
   @override
@@ -31,8 +30,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   double _volume = 80;
   int _wakeUpTime = 8;
   int _turnOffTime = 21;
+  bool _notificationsEnabled = true;
 
-  // Forest green theme colors matching dashboard_screen.dart
   final Color _primaryGreen = Colors.green.shade800;
   final Color _accentGreen = Colors.green.shade600;
 
@@ -57,7 +56,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.dispose();
   }
 
-  // Handles audio playback of example voice recordings
   Future<void> _playVoiceSample(String voiceKey) async {
     try {
       await _audioPlayer.play(AssetSource('audio/$voiceKey.wav'));
@@ -94,6 +92,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _volume = (data['volume'] ?? 80).toDouble();
         _wakeUpTime = _parseTime(data['wake_up_time'], 8);
         _turnOffTime = _parseTime(data['turn_off_time'], 21);
+        _notificationsEnabled = data['notifications_enabled'] ?? true;
       });
     }
     setState(() => _isLoading = false);
@@ -109,6 +108,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'volume': _volume.toInt(),
       'wake_up_time': _wakeUpTime,
       'turn_off_time': _turnOffTime,
+      'notifications_enabled': _notificationsEnabled,
     });
 
     if (mounted) {
@@ -118,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('Device settings updated successfully!'),
+            content: const Text('Settings updated successfully!'),
             backgroundColor: _primaryGreen,
           ),
         );
@@ -127,7 +127,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Reusable decoration matching dashboard design
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
@@ -153,7 +152,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       backgroundColor: Colors.grey.shade100,
       appBar: AppBar(
-        title: Text(widget.isSetupMode ? 'Device Setup' : 'Device Settings'),
+        title: Text(widget.isSetupMode ? 'Device Setup' : 'Settings'),
         backgroundColor: _primaryGreen,
         foregroundColor: Colors.white,
         automaticallyImplyLeading: !widget.isSetupMode, 
@@ -168,11 +167,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16.0),
         children: [
-          // --- PEOPLE CARD ---
-          Text(
-            'People', 
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)
-          ),
+          Text('People', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)),
           const SizedBox(height: 8),
           Card(
             elevation: 2,
@@ -181,15 +176,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
-                  TextField(
-                    controller: _carerController,
-                    decoration: _inputDecoration('Carer Name'),
-                  ),
+                  TextField(controller: _carerController, decoration: _inputDecoration('Carer Name')),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _personController,
-                    decoration: _inputDecoration('Person in Care'),
-                  ),
+                  TextField(controller: _personController, decoration: _inputDecoration('Person in Care')),
                 ],
               ),
             ),
@@ -197,11 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           
           const SizedBox(height: 20),
 
-          // --- AUDIO SETTINGS CARD ---
-          Text(
-            'Audio Settings', 
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)
-          ),
+          Text('Audio Settings', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)),
           const SizedBox(height: 8),
           Card(
             elevation: 2,
@@ -219,10 +204,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           decoration: _inputDecoration('Device Voice'),
                           value: _selectedVoice,
                           items: _availableVoices.entries.map((entry) {
-                            return DropdownMenuItem<String>(
-                              value: entry.key,
-                              child: Text(entry.value),
-                            );
+                            return DropdownMenuItem<String>(value: entry.key, child: Text(entry.value));
                           }).toList(),
                           onChanged: (val) => setState(() => _selectedVoice = val!),
                         ),
@@ -237,10 +219,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ],
                   ),
                   const SizedBox(height: 20),
-                  Text(
-                    'Device Volume (${_volume.toInt()}%)', 
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700)
-                  ),
+                  Text('Device Volume (${_volume.toInt()}%)', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey.shade700)),
                   Slider(
                     value: _volume,
                     min: 0,
@@ -259,11 +238,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           const SizedBox(height: 20),
 
-          // --- ACTIVE HOURS CARD ---
-          Text(
-            'Active Hours', 
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)
-          ),
+          Text('Active Hours', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)),
           const SizedBox(height: 8),
           Card(
             elevation: 2,
@@ -276,10 +251,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: DropdownButtonFormField<int>(
                       decoration: _inputDecoration('Wake Up Time'),
                       value: _wakeUpTime,
-                      items: hours.map((h) => DropdownMenuItem<int>(
-                        value: h, 
-                        child: Text('${h.toString().padLeft(2, '0')}:00')
-                      )).toList(),
+                      items: hours.map((h) => DropdownMenuItem<int>(value: h, child: Text('${h.toString().padLeft(2, '0')}:00'))).toList(),
                       onChanged: (val) => setState(() => _wakeUpTime = val!),
                     ),
                   ),
@@ -288,10 +260,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: DropdownButtonFormField<int>(
                       decoration: _inputDecoration('Turn Off Time'),
                       value: _turnOffTime,
-                      items: hours.map((h) => DropdownMenuItem<int>(
-                        value: h, 
-                        child: Text('${h.toString().padLeft(2, '0')}:00')
-                      )).toList(),
+                      items: hours.map((h) => DropdownMenuItem<int>(value: h, child: Text('${h.toString().padLeft(2, '0')}:00'))).toList(),
                       onChanged: (val) => setState(() => _turnOffTime = val!),
                     ),
                   ),
@@ -300,9 +269,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
+          const SizedBox(height: 20),
+
+          Text('Notifications', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: _primaryGreen)),
+          const SizedBox(height: 8),
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            child: SwitchListTile(
+              title: const Text('Enable Push Notifications', style: TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: const Text('Receive alerts to your phone when morning and evening messages are triggered.', style: TextStyle(fontSize: 12)),
+              activeColor: _primaryGreen,
+              value: _notificationsEnabled,
+              onChanged: (val) => setState(() => _notificationsEnabled = val),
+            ),
+          ),
+
           const SizedBox(height: 28),
 
-          // --- SAVE BUTTON ---
           SizedBox(
             width: double.infinity,
             child: ElevatedButton.icon(

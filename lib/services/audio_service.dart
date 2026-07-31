@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_database/firebase_database.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -54,6 +56,18 @@ class AudioService {
       if (await file.exists()) {
         await file.delete();
       }
+
+      // Tell the Pi to download this file immediately
+      final dbRef = FirebaseDatabase.instanceFor(
+        app: Firebase.app(),
+        databaseURL: 'https://memorando-jba-default-rtdb.europe-west1.firebasedatabase.app'
+      ).ref('devices/$deviceId/messages');
+      
+      // Update a trigger key with a timestamp so the Pi notices a change
+      await dbRef.update({
+        '${timeOfDay}_audio_trigger': DateTime.now().millisecondsSinceEpoch
+      });
+
       return true;
     } catch (e) {
       debugPrint("Upload error: $e");
