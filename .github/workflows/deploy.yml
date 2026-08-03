@@ -22,7 +22,7 @@ jobs:
         run: flutter pub get
 
       - name: Build Web App
-        run: flutter build web --base-href "/Memorando/"
+        run: flutter build web --base-href "/MemorandoApp/"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
