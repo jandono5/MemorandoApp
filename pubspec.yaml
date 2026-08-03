@@ -47,6 +47,14 @@ dependencies:
   firebase_messaging: ^16.4.3
   google_fonts: ^8.2.0
   google_sign_in: ^7.2.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  ios: true
+  android: true
+  remove_alpha_ios: true
+  image_path: "lib/assets/icon1024.png"
+  
 
 dev_dependencies:
   flutter_test:
