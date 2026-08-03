@@ -798,9 +798,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       maxLines: 2,
                                       maxLength: 250,
                                       decoration: InputDecoration(
-                                        hintText: "You do not have anything on today - you can take the day to relax!",
+                                        hintText: "(Default) You do not have anything on today - you can take the day to relax!",
                                         hintMaxLines: 2,
-                                        labelText: 'Morning Message', 
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),
@@ -858,9 +857,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       maxLines: 2,
                                       maxLength: 250,
                                       decoration: InputDecoration(
-                                        hintText: "There's nothing for you to do tonight. Relax and have a lovely night's sleep!",
+                                        hintText: "(Default) There's nothing for you to do tonight. Relax and have a lovely night's sleep!",
                                         hintMaxLines: 2,
-                                        labelText: 'Evening Message', 
                                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                                         focusedBorder: OutlineInputBorder(
                                           borderRadius: BorderRadius.circular(8),

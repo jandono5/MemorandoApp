@@ -29,7 +29,7 @@ class MemorandoApp extends StatelessWidget {
     return MaterialApp(
       title: 'Memorando App',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.green.shade900),
         useMaterial3: true,
       ),
       home: Consumer<AppState>(
