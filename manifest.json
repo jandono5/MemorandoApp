@@ -1,0 +1,23 @@
+{
+    "name": "Memorando",
+    "short_name": "Memorando",
+    "start_url": ".",
+    "display": "standalone",
+    "background_color": "#000000",
+    "theme_color": "#007700",
+    "description": "Hosting static files for carers using the Memorando device during testing for the JRA programme.",
+    "orientation": "portrait-primary",
+    "prefer_related_applications": false,
+    "icons": [
+        {
+            "src": "lib/assets/icon192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "lib/assets/icon512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
