@@ -6,26 +6,38 @@ import 'package:path_provider/path_provider.dart';
 import 'package:record/record.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http; // NEW IMPORT
 
 class AudioService {
   final AudioRecorder _recorder = AudioRecorder();
   
   // Exposes a stream of amplitude data (dB) updated every 100ms
-  Stream<Amplitude> get amplitudeStream => _recorder.onAmplitudeChanged(const Duration(milliseconds: 100));
+  Stream get amplitudeStream => _recorder.onAmplitudeChanged(const Duration(milliseconds: 100));
 
   // Starts recording and returns true if successful
-  Future<bool> startRecording(String deviceId, String timeOfDay) async {
+  Future startRecording(String deviceId, String timeOfDay) async {
     try {
-      final status = await Permission.microphone.request();
-      if (status != PermissionStatus.granted) return false;
+      // 1. Skip permission_handler on the Web, it causes issues.
+      if (!kIsWeb) {
+        final status = await Permission.microphone.request();
+        if (status != PermissionStatus.granted) return false;
+      }
 
+      // 2. The record package has its own web-safe permission checker
       if (await _recorder.hasPermission()) {
-        final dir = await getApplicationDocumentsDirectory();
-        final filePath = '${dir.path}/${deviceId}_$timeOfDay.m4a';
+        String path = ''; 
+        AudioEncoder encoder = AudioEncoder.opus; // Web browsers prefer Opus
+
+        // 3. Only use local paths and AAC encoding if NOT on the web
+        if (!kIsWeb) {
+          final dir = await getApplicationDocumentsDirectory();
+          path = '${dir.path}/${deviceId}_$timeOfDay.m4a';
+          encoder = AudioEncoder.aacLc;
+        }
         
         await _recorder.start(
-          const RecordConfig(encoder: AudioEncoder.aacLc),
-          path: filePath,
+          RecordConfig(encoder: encoder),
+          path: path, // On web, an empty string tells it to generate a virtual Blob URL
         );
         return true;
       }
@@ -36,7 +48,7 @@ class AudioService {
   }
 
   // Stops recording and returns the local file path for playback
-  Future<String?> stopRecording() async {
+  Future stopRecording() async {
     try {
       return await _recorder.stop();
     } catch (e) {
@@ -46,15 +58,22 @@ class AudioService {
   }
 
   // Uploads the reviewed audio to Firebase and deletes the local cache
-  Future<bool> uploadAudio(String deviceId, String timeOfDay, String localPath) async {
+  Future uploadAudio(String deviceId, String timeOfDay, String localPath) async {
     try {
-      final file = File(localPath);
       final storageRef = FirebaseStorage.instance.ref().child('${deviceId}_$timeOfDay.m4a');
       
-      await storageRef.putFile(file);
-      
-      if (await file.exists()) {
-        await file.delete();
+      if (kIsWeb) {
+        // WEB UPLOAD: Fetch the virtual blob URL data and push it as bytes
+        final response = await http.get(Uri.parse(localPath));
+        await storageRef.putData(response.bodyBytes, SettableMetadata(contentType: 'audio/webm'));
+      } else {
+        // MOBILE UPLOAD: Read the physical file from the hard drive
+        final file = File(localPath);
+        await storageRef.putFile(file);
+        
+        if (await file.exists()) {
+          await file.delete();
+        }
       }
 
       // Tell the Pi to download this file immediately
@@ -76,11 +95,15 @@ class AudioService {
   }
 
   // Deletes the local file if the user chooses to discard the recording
-  Future<void> deleteLocalAudio(String localPath) async {
+  Future deleteLocalAudio(String localPath) async {
     try {
-      final file = File(localPath);
-      if (await file.exists()) {
-        await file.delete();
+      // Web Blob URLs are automatically deleted by the browser when closed,
+      // so we only need to delete physical files on mobile.
+      if (!kIsWeb) {
+        final file = File(localPath);
+        if (await file.exists()) {
+          await file.delete();
+        }
       }
     } catch (e) {
       debugPrint("Delete error: $e");
