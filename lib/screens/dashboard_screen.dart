@@ -392,7 +392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (isRecording) ...[
                     Padding(
                       padding: const EdgeInsets.all(24.0),
-                      child: AudioVisualizer(amplitudeStream: _audioService.amplitudeStream),
+                      child: AudioVisualizer(amplitudeStream: _audioService.amplitudeStream.cast()),
                     ),
                     const SizedBox(height: 8),
                     ElevatedButton.icon(
@@ -892,20 +892,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             ],
                           ),
                       
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton.icon(
-                          onPressed: _saveDailyMessages,
-                          icon: const Icon(Icons.save),
-                          label: const Text('Save Text Updates'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryGreen,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12)
+                      // --- CONDITIONAL SAVE BUTTON ---
+                      if (!(_morningStatus.startsWith('Played') && _eveningStatus.startsWith('Played'))) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          child: ElevatedButton.icon(
+                            onPressed: _saveDailyMessages,
+                            icon: const Icon(Icons.save),
+                            label: const Text('Save Text Updates'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryGreen,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 12)
+                            ),
                           ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),
