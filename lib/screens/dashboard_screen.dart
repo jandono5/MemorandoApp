@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:math'; 
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -333,10 +335,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       await _cloudAudioPlayer.stop();
 
+      // Get the reference from Firebase
       final ref = FirebaseStorage.instance.ref().child('${widget.deviceId}_$slot.m4a');
-      final url = await ref.getDownloadURL();
       
-      await _cloudAudioPlayer.play(UrlSource(url));
+      // Create a temporary file on the phone
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/temp_$slot.m4a');
+      
+      // Download it and play it locally (bypassing the MIME type streaming issue)
+      await ref.writeToFile(file);
+      await _cloudAudioPlayer.play(DeviceFileSource(file.path));
+      
     } catch (e) {
       debugPrint("Error playing cloud audio: $e");
       if (mounted) {
@@ -510,10 +519,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     List<String> hours = [];
     
     if (_wakeUpTime < _turnOffTime) {
-      for (int i = _wakeUpTime; i < _turnOffTime; i++) hours.add(i.toString().padLeft(2, '0'));
+      for (int i = _wakeUpTime; i < _turnOffTime; i++) {
+        hours.add(i.toString().padLeft(2, '0'));
+      }
     } else {
-      for (int i = _wakeUpTime; i < 24; i++) hours.add(i.toString().padLeft(2, '0'));
-      for (int i = 0; i < _turnOffTime; i++) hours.add(i.toString().padLeft(2, '0'));
+      for (int i = _wakeUpTime; i < 24; i++) {
+        hours.add(i.toString().padLeft(2, '0'));
+      }
+      for (int i = 0; i < _turnOffTime; i++) {
+        hours.add(i.toString().padLeft(2, '0'));
+      }
     }
     
     if (hours.isEmpty) hours = ["12"]; 
@@ -563,7 +578,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: _primaryGreen.withOpacity(0.1),
+                      color: _primaryGreen.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
@@ -692,7 +707,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           await newRef.putData(data);
                           await oldRef.delete();
                           
-                          this.setState(() {
+                          setState(() {
                             _availableCloudAudio.remove(oldFileName);
                             _availableCloudAudio.add(newFileName);
                           });
@@ -957,7 +972,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         leading: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: _primaryGreen.withOpacity(0.1),
+                            color: _primaryGreen.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(Icons.access_time, color: _primaryGreen),
