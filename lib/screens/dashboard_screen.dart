@@ -1,7 +1,5 @@
 import 'dart:async';
-import 'dart:math'; 
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -335,16 +333,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       
       await _cloudAudioPlayer.stop();
 
-      // Get the reference from Firebase
       final ref = FirebaseStorage.instance.ref().child('${widget.deviceId}_$slot.m4a');
+      final url = await ref.getDownloadURL();
       
-      // Create a temporary file on the phone
-      final dir = await getTemporaryDirectory();
-      final file = File('${dir.path}/temp_$slot.m4a');
-      
-      // Download it and play it locally (bypassing the MIME type streaming issue)
-      await ref.writeToFile(file);
-      await _cloudAudioPlayer.play(DeviceFileSource(file.path));
+      await _cloudAudioPlayer.play(UrlSource(url));
       
     } catch (e) {
       debugPrint("Error playing cloud audio: $e");
